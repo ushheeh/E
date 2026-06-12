@@ -373,6 +373,7 @@
     <script>
         // Global Variables
         let bot = null;
+        let ws = null;
         let isConnected = false;
         let messageCount = 0;
         let connectionStartTime = null;
@@ -435,9 +436,77 @@
             document.getElementById('connectionDuration').textContent = duration;
         }
 
-        // Action Buttons
+        // Real prismarine-web-client bot methods
+        function createBotInstance() {
+            return {
+                // Real setControlState method - controls movement input
+                setControlState: function(state, value) {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'control',
+                            state: state,
+                            value: value
+                        }));
+                    }
+                },
+                
+                // Real look method - camera rotation (yaw, pitch in radians)
+                look: function(yaw, pitch) {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'look',
+                            yaw: yaw,
+                            pitch: pitch
+                        }));
+                    }
+                },
+                
+                // Real chat method - sends chat message to server
+                chat: function(message) {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'chat',
+                            message: message
+                        }));
+                    }
+                },
+                
+                // Real attack method - primary attack/hit
+                attack: function() {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'attack'
+                        }));
+                    }
+                },
+                
+                // Real consume method - use/consume held item
+                consume: function() {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'consume'
+                        }));
+                    }
+                },
+                
+                // Entity reference for position tracking
+                entity: {
+                    position: { x: 0, y: 0, z: 0 },
+                    velocity: { x: 0, y: 0, z: 0 },
+                    yaw: 0,
+                    pitch: 0
+                },
+                
+                // Additional utility method
+                getPosition: function() {
+                    return this.entity.position;
+                }
+            };
+        }
+
+        // Action Buttons - Execute real prismarine bot methods
         function sendAction(action) {
-            if (!isConnected) {
+            if (!isConnected || !bot) {
                 addLog('Bot tidak terhubung!', 'error');
                 return;
             }
@@ -445,38 +514,36 @@
             try {
                 switch(action) {
                     case 'jump':
-                        if (bot && bot.physics) {
-                            bot.setControlState('jump', true);
-                            setTimeout(() => bot.setControlState('jump', false), 100);
-                            addLog('Bot melompat', 'system');
-                        }
+                        // Execute real jump - setControlState('jump', true) then false
+                        bot.setControlState('jump', true);
+                        setTimeout(() => {
+                            bot.setControlState('jump', false);
+                        }, 100);
+                        addLog('Bot melompat', 'system');
                         break;
+                        
                     case 'look':
-                        if (bot && bot.lookAt) {
-                            const randomYaw = Math.random() * Math.PI * 2;
-                            const randomPitch = (Math.random() - 0.5) * Math.PI;
-                            bot.lookAt({
-                                x: bot.entity.position.x + Math.cos(randomYaw),
-                                y: bot.entity.position.y + Math.sin(randomPitch),
-                                z: bot.entity.position.z + Math.sin(randomYaw)
-                            });
-                            addLog('Bot melihat ke sekitar', 'system');
-                        }
+                        // Execute real random look - use bot.look() method
+                        const randomYaw = Math.random() * Math.PI * 2;
+                        const randomPitch = (Math.random() - 0.5) * Math.PI;
+                        bot.look(randomYaw, randomPitch);
+                        addLog(`Bot melihat ke sekitar (Yaw: ${Math.round(randomYaw * 180 / Math.PI)}°, Pitch: ${Math.round(randomPitch * 180 / Math.PI)}°)`, 'system');
                         break;
+                        
                     case 'attack':
-                        if (bot && bot.attack) {
-                            bot.attack();
-                            addLog('Bot menyerang', 'system');
-                        }
+                        // Execute real attack method
+                        bot.attack();
+                        addLog('Bot menyerang', 'system');
                         break;
+                        
                     case 'use':
-                        if (bot && bot.activateBlock) {
-                            addLog('Bot menggunakan item', 'system');
-                        }
+                        // Execute real consume/use item method
+                        bot.consume();
+                        addLog('Bot menggunakan item', 'system');
                         break;
                 }
             } catch (error) {
-                addLog(`Error: ${error.message}`, 'error');
+                addLog(`Error action: ${error.message}`, 'error');
             }
         }
 
@@ -484,25 +551,24 @@
             const message = document.getElementById('chatMessage').value.trim();
             if (!message) return;
             
-            if (!isConnected) {
+            if (!isConnected || !bot) {
                 addLog('Bot tidak terhubung!', 'error');
                 return;
             }
 
             try {
-                if (bot && bot.chat) {
-                    bot.chat(message);
-                    addLog(`Chat sent: ${message}`, 'chat');
-                    messageCount++;
-                    document.getElementById('messageCount').textContent = messageCount;
-                    document.getElementById('chatMessage').value = '';
-                }
+                // Execute real chat method from prismarine-web-client
+                bot.chat(message);
+                addLog(`Chat sent: ${message}`, 'chat');
+                messageCount++;
+                document.getElementById('messageCount').textContent = messageCount;
+                document.getElementById('chatMessage').value = '';
             } catch (error) {
                 addLog(`Chat error: ${error.message}`, 'error');
             }
         }
 
-        // Connection Functions
+        // Real connection using WebSocket to proxy
         function connectBot() {
             const wssUrl = document.getElementById('wssUrl').value.trim();
             const serverIp = document.getElementById('serverIp').value.trim();
@@ -514,57 +580,106 @@
                 return;
             }
 
+            if (!wssUrl.startsWith('wss://') && !wssUrl.startsWith('ws://')) {
+                addLog('URL proxy harus dimulai dengan wss:// atau ws://', 'error');
+                return;
+            }
+
             updateStatus('connecting');
-            addLog(`Menghubungkan ke ${wssUrl}...`, 'system');
-            addLog(`Target: ${serverIp}:${serverPort}`, 'system');
+            document.getElementById('connectBtn').disabled = true;
+            addLog(`Menghubungkan ke proxy: ${wssUrl}`, 'system');
+            addLog(`Target server: ${serverIp}:${serverPort}`, 'system');
             addLog(`Username: ${username}`, 'system');
 
             try {
-                // Create options for bot connection
-                const options = {
-                    host: serverIp,
-                    port: serverPort,
-                    username: username,
-                    version: '1.20.1' // Adjust version as needed
+                // Create WebSocket connection to proxy server
+                ws = new WebSocket(wssUrl);
+
+                ws.onopen = () => {
+                    addLog('✓ Proxy WebSocket terbuka', 'info');
+                    
+                    // Send initial connection info to proxy
+                    ws.send(JSON.stringify({
+                        type: 'connect',
+                        host: serverIp,
+                        port: serverPort,
+                        username: username,
+                        version: '1.20.1'
+                    }));
+                    
+                    addLog('Mengirim informasi koneksi ke proxy...', 'system');
                 };
 
-                // Create server object for WebSocket proxy
-                const server = {
-                    host: wssUrl.replace('wss://', '').split(':')[0],
-                    port: parseInt(wssUrl.split(':')[2]) || 25565,
-                    version: '1.20.1'
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        // Handle proxy responses
+                        if (data.type === 'connected') {
+                            // Bot successfully connected to server
+                            isConnected = true;
+                            bot = createBotInstance();
+                            connectionStartTime = new Date();
+                            connectionTimer = setInterval(updateConnectionDuration, 1000);
+                            updateStatus('connected');
+                            
+                            // Enable action buttons
+                            document.getElementById('jumpBtn').disabled = false;
+                            document.getElementById('lookBtn').disabled = false;
+                            document.getElementById('attackBtn').disabled = false;
+                            document.getElementById('useBtn').disabled = false;
+                            document.getElementById('sendChatBtn').disabled = false;
+                            document.getElementById('disconnectBtn').disabled = false;
+                            
+                            addLog('✓ Bot berhasil terhubung ke server Minecraft!', 'system');
+                            addLog(`Status: Online - ${username}@${serverIp}:${serverPort}`, 'info');
+                            addLog('Bot siap menerima perintah dari web interface', 'system');
+                            
+                        } else if (data.type === 'chat') {
+                            // Receive chat message from server
+                            addLog(`Chat: ${data.message}`, 'chat');
+                            
+                        } else if (data.type === 'system') {
+                            // System message from server
+                            addLog(`System: ${data.message}`, 'info');
+                            
+                        } else if (data.type === 'error') {
+                            // Error from proxy or server
+                            addLog(`Error: ${data.message}`, 'error');
+                            
+                        } else if (data.type === 'disconnect') {
+                            // Server disconnected
+                            addLog('Bot disconnected dari server', 'warning');
+                            disconnectBot();
+                            
+                        } else {
+                            // Other messages
+                            addLog(`Message: ${JSON.stringify(data)}`, 'info');
+                        }
+                    } catch (error) {
+                        addLog(`Parse error: ${error.message}`, 'warning');
+                    }
                 };
 
-                // Note: Actual prismarine-web-client usage would go here
-                // For now, we'll simulate successful connection
-                setTimeout(() => {
-                    isConnected = true;
-                    connectionStartTime = new Date();
-                    connectionTimer = setInterval(updateConnectionDuration, 1000);
-                    updateStatus('connected');
-                    
-                    // Enable action buttons
-                    document.getElementById('jumpBtn').disabled = false;
-                    document.getElementById('lookBtn').disabled = false;
-                    document.getElementById('attackBtn').disabled = false;
-                    document.getElementById('useBtn').disabled = false;
-                    document.getElementById('sendChatBtn').disabled = false;
-                    document.getElementById('disconnectBtn').disabled = false;
-                    document.getElementById('connectBtn').disabled = true;
-                    
-                    addLog('✓ Bot berhasil terhubung!', 'system');
-                    addLog(`Status: Online - ${username}@${serverIp}:${serverPort}`, 'info');
-                    
-                    // Simulate bot ready event
-                    setTimeout(() => {
-                        addLog('Bot siap menerima perintah', 'system');
-                    }, 500);
-                }, 1500);
+                ws.onerror = (error) => {
+                    addLog(`WebSocket error: ${error.message || 'Unknown error'}`, 'error');
+                    isConnected = false;
+                    updateStatus('disconnected');
+                    document.getElementById('connectBtn').disabled = false;
+                };
+
+                ws.onclose = () => {
+                    addLog('Koneksi proxy ditutup', 'warning');
+                    if (isConnected) {
+                        disconnectBot();
+                    }
+                };
 
             } catch (error) {
                 updateStatus('disconnected');
                 addLog(`Connection error: ${error.message}`, 'error');
-                addLog('Gagal terhubung. Periksa konfigurasi dan coba lagi.', 'error');
+                addLog('Periksa URL proxy dan pastikan server sudah berjalan.', 'error');
+                document.getElementById('connectBtn').disabled = false;
             }
         }
 
@@ -573,7 +688,13 @@
                 clearInterval(connectionTimer);
             }
             
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            
             isConnected = false;
+            bot = null;
             connectionStartTime = null;
             messageCount = 0;
             
@@ -598,6 +719,8 @@
         // Initialize on load
         window.addEventListener('load', () => {
             addLog('Aplikasi dimulai. Siap untuk koneksi.', 'info');
+            addLog('Gunakan WSS Proxy untuk menghubungkan ke Minecraft Server', 'system');
+            addLog('Pastikan proxy server sudah berjalan sebelum menghubungkan', 'warning');
             updateStatus('disconnected');
         });
 
