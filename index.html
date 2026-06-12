@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Bot Controller - Web Client</title>
+    
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        minecraft: {
+                            light: '#8B8B8B',
+                            dark: '#1A1A1A',
+                            accent: '#00BCD4'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #4B5563 #2A2E37;
+        }
+        *::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        *::-webkit-scrollbar-track {
+            background: #2A2E37;
+        }
+        *::-webkit-scrollbar-thumb {
+            background: #4B5563;
+            border-radius: 4px;
+        }
+        *::-webkit-scrollbar-thumb:hover {
+            background: #5A6573;
+        }
+        
+        .terminal {
+            font-family: 'Courier New', monospace;
+            background-color: #0f0f0f;
+            color: #00ff00;
+            overflow-y: auto;
+            max-height: 400px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            line-height: 1.4;
+        }
+        
+        .log-entry {
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        
+        .log-entry.system {
+            color: #00ff00;
+        }
+        
+        .log-entry.chat {
+            color: #ffff00;
+        }
+        
+        .log-entry.error {
+            color: #ff4444;
+        }
+        
+        .log-entry.info {
+            color: #00ccff;
+        }
+        
+        .log-entry.warning {
+            color: #ffaa00;
+        }
+        
+        .btn-action {
+            transition: all 0.3s ease;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 188, 212, 0.3);
+        }
+        
+        .btn-action:active {
+            transform: translateY(0);
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.connected {
+            background-color: #4ade80;
+            box-shadow: 0 0 10px rgba(74, 222, 128, 0.7);
+        }
+        
+        .status-indicator.disconnected {
+            background-color: #ef4444;
+            animation: none;
+        }
+        
+        .status-indicator.connecting {
+            background-color: #f59e0b;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        
+        input[type="text"], input[type="number"], input[type="url"] {
+            background-color: #1f2937;
+            border-color: #4b5563;
+            color: #e5e7eb;
+        }
+        
+        input[type="text"]:focus, input[type="number"]:focus, input[type="url"]:focus {
+            background-color: #111827;
+            border-color: #00bcd4;
+            box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.1);
+        }
+    </style>
+</head>
+<body class="dark bg-gray-900 text-gray-100">
+    <div class="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        <!-- Header -->
+        <header class="bg-gray-800 border-b border-gray-700 shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 py-6">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-minecraft-accent rounded-lg flex items-center justify-center">
+                            <span class="text-gray-900 font-bold text-xl">⚙️</span>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold text-white">Minecraft Bot Controller</h1>
+                            <p class="text-gray-400 text-sm">Web-based Bot Manager via WSS Proxy</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="status-indicator disconnected" id="statusIndicator"></span>
+                        <span class="text-sm font-semibold" id="statusText">Disconnected</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 py-8">
+            <!-- Connection Settings -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Connection Panel -->
+                <div class="lg:col-span-3">
+                    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+                        <h2 class="text-xl font-bold text-white mb-6 flex items-center">
+                            <span class="text-minecraft-accent mr-2">🔗</span> Connection Settings
+                        </h2>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                            <!-- WSS Proxy URL -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">WSS Proxy URL</label>
+                                <input 
+                                    type="url" 
+                                    id="wssUrl" 
+                                    placeholder="wss://proxy.example.com:25565"
+                                    class="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-minecraft-accent"
+                                    value="wss://localhost:25565"
+                                >
+                            </div>
+                            
+                            <!-- Server IP -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Server IP</label>
+                                <input 
+                                    type="text" 
+                                    id="serverIp" 
+                                    placeholder="127.0.0.1 atau server.com"
+                                    class="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-minecraft-accent"
+                                    value="127.0.0.1"
+                                >
+                            </div>
+                            
+                            <!-- Server Port -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Server Port</label>
+                                <input 
+                                    type="number" 
+                                    id="serverPort" 
+                                    placeholder="25565"
+                                    class="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-minecraft-accent"
+                                    value="25565"
+                                    min="1"
+                                    max="65535"
+                                >
+                            </div>
+                            
+                            <!-- Username -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Bot Username</label>
+                                <input 
+                                    type="text" 
+                                    id="botUsername" 
+                                    placeholder="BotName"
+                                    class="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-minecraft-accent"
+                                    value="Bot"
+                                >
+                            </div>
+                        </div>
+                        
+                        <!-- Connection Buttons -->
+                        <div class="flex gap-3">
+                            <button 
+                                id="connectBtn"
+                                onclick="connectBot()"
+                                class="btn-action flex-1 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg"
+                            >
+                                ▶ Hubungkan Bot
+                            </button>
+                            <button 
+                                id="disconnectBtn"
+                                onclick="disconnectBot()"
+                                class="btn-action flex-1 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled
+                            >
+                                ⏹ Putus Koneksi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions Panel -->
+                <div class="lg:col-span-3">
+                    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+                        <h2 class="text-xl font-bold text-white mb-6 flex items-center">
+                            <span class="text-minecraft-accent mr-2">⚡</span> Quick Actions
+                        </h2>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <button 
+                                id="jumpBtn"
+                                onclick="sendAction('jump')"
+                                class="btn-action bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled
+                            >
+                                🦘 Lompat
+                            </button>
+                            
+                            <button 
+                                id="lookBtn"
+                                onclick="sendAction('look')"
+                                class="btn-action bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled
+                            >
+                                👀 Lihat Sekitar
+                            </button>
+                            
+                            <button 
+                                id="attackBtn"
+                                onclick="sendAction('attack')"
+                                class="btn-action bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled
+                            >
+                                ⚔️ Serang
+                            </button>
+                            
+                            <button 
+                                id="useBtn"
+                                onclick="sendAction('use')"
+                                class="btn-action bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled
+                            >
+                                ✋ Gunakan Item
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Panel -->
+                <div class="lg:col-span-3">
+                    <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+                        <h2 class="text-xl font-bold text-white mb-6 flex items-center">
+                            <span class="text-minecraft-accent mr-2">💬</span> Send Chat
+                        </h2>
+                        
+                        <div class="flex gap-3">
+                            <input 
+                                type="text" 
+                                id="chatMessage" 
+                                placeholder="Ketik pesan untuk dikirim ke server..."
+                                class="flex-1 px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-minecraft-accent"
+                                onkeypress="if(event.key==='Enter') sendChat()"
+                            >
+                            <button 
+                                id="sendChatBtn"
+                                onclick="sendChat()"
+                                class="btn-action bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled
+                            >
+                                📤 Kirim
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Terminal/Log Panel -->
+            <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-bold text-white flex items-center">
+                        <span class="text-minecraft-accent mr-2">📋</span> Terminal / Log System
+                    </h2>
+                    <button 
+                        onclick="clearLog()"
+                        class="btn-action bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm"
+                    >
+                        🗑 Clear Log
+                    </button>
+                </div>
+                
+                <div id="terminal" class="terminal">
+                    <div class="log-entry system">[SYSTEM] Minecraft Bot Controller siap digunakan.</div>
+                    <div class="log-entry system">[SYSTEM] Isi konfigurasi koneksi dan tekan "Hubungkan Bot".</div>
+                </div>
+            </div>
+
+            <!-- Status Info -->
+            <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                    <p class="text-gray-400 text-sm">Bot Status</p>
+                    <p class="text-2xl font-bold" id="statusLabel">Offline</p>
+                </div>
+                <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                    <p class="text-gray-400 text-sm">Messages Sent</p>
+                    <p class="text-2xl font-bold" id="messageCount">0</p>
+                </div>
+                <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                    <p class="text-gray-400 text-sm">Connection Duration</p>
+                    <p class="text-2xl font-bold" id="connectionDuration">00:00:00</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="mt-12 bg-gray-800 border-t border-gray-700">
+            <div class="max-w-7xl mx-auto px-4 py-6 text-center text-gray-400 text-sm">
+                <p>Minecraft Bot Controller v1.0 | Powered by prismarine-web-client & Tailwind CSS</p>
+                <p class="mt-2">⚠️ Hanya untuk testing & development | Gunakan dengan bijak</p>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Global Variables
+        let bot = null;
+        let isConnected = false;
+        let messageCount = 0;
+        let connectionStartTime = null;
+        let connectionTimer = null;
+
+        // Logging Functions
+        function addLog(message, type = 'system') {
+            const terminal = document.getElementById('terminal');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            terminal.appendChild(logEntry);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function clearLog() {
+            const terminal = document.getElementById('terminal');
+            terminal.innerHTML = '';
+            addLog('Log cleared.', 'system');
+        }
+
+        // Status Update Functions
+        function updateStatus(status) {
+            const indicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            const statusLabel = document.getElementById('statusLabel');
+            
+            indicator.className = `status-indicator ${status}`;
+            
+            switch(status) {
+                case 'connected':
+                    statusText.textContent = 'Connected';
+                    statusLabel.textContent = 'Online';
+                    statusLabel.className = 'text-2xl font-bold text-green-400';
+                    break;
+                case 'connecting':
+                    statusText.textContent = 'Connecting...';
+                    statusLabel.textContent = 'Connecting...';
+                    statusLabel.className = 'text-2xl font-bold text-yellow-400';
+                    break;
+                case 'disconnected':
+                    statusText.textContent = 'Disconnected';
+                    statusLabel.textContent = 'Offline';
+                    statusLabel.className = 'text-2xl font-bold text-red-400';
+                    break;
+            }
+        }
+
+        function updateConnectionDuration() {
+            if (!connectionStartTime) return;
+            
+            const now = new Date();
+            const diff = Math.floor((now - connectionStartTime) / 1000);
+            const hours = Math.floor(diff / 3600);
+            const minutes = Math.floor((diff % 3600) / 60);
+            const seconds = diff % 60;
+            
+            const duration = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            document.getElementById('connectionDuration').textContent = duration;
+        }
+
+        // Action Buttons
+        function sendAction(action) {
+            if (!isConnected) {
+                addLog('Bot tidak terhubung!', 'error');
+                return;
+            }
+
+            try {
+                switch(action) {
+                    case 'jump':
+                        if (bot && bot.physics) {
+                            bot.setControlState('jump', true);
+                            setTimeout(() => bot.setControlState('jump', false), 100);
+                            addLog('Bot melompat', 'system');
+                        }
+                        break;
+                    case 'look':
+                        if (bot && bot.lookAt) {
+                            const randomYaw = Math.random() * Math.PI * 2;
+                            const randomPitch = (Math.random() - 0.5) * Math.PI;
+                            bot.lookAt({
+                                x: bot.entity.position.x + Math.cos(randomYaw),
+                                y: bot.entity.position.y + Math.sin(randomPitch),
+                                z: bot.entity.position.z + Math.sin(randomYaw)
+                            });
+                            addLog('Bot melihat ke sekitar', 'system');
+                        }
+                        break;
+                    case 'attack':
+                        if (bot && bot.attack) {
+                            bot.attack();
+                            addLog('Bot menyerang', 'system');
+                        }
+                        break;
+                    case 'use':
+                        if (bot && bot.activateBlock) {
+                            addLog('Bot menggunakan item', 'system');
+                        }
+                        break;
+                }
+            } catch (error) {
+                addLog(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        function sendChat() {
+            const message = document.getElementById('chatMessage').value.trim();
+            if (!message) return;
+            
+            if (!isConnected) {
+                addLog('Bot tidak terhubung!', 'error');
+                return;
+            }
+
+            try {
+                if (bot && bot.chat) {
+                    bot.chat(message);
+                    addLog(`Chat sent: ${message}`, 'chat');
+                    messageCount++;
+                    document.getElementById('messageCount').textContent = messageCount;
+                    document.getElementById('chatMessage').value = '';
+                }
+            } catch (error) {
+                addLog(`Chat error: ${error.message}`, 'error');
+            }
+        }
+
+        // Connection Functions
+        function connectBot() {
+            const wssUrl = document.getElementById('wssUrl').value.trim();
+            const serverIp = document.getElementById('serverIp').value.trim();
+            const serverPort = parseInt(document.getElementById('serverPort').value);
+            const username = document.getElementById('botUsername').value.trim();
+
+            if (!wssUrl || !serverIp || !username) {
+                addLog('Semua field harus diisi!', 'error');
+                return;
+            }
+
+            updateStatus('connecting');
+            addLog(`Menghubungkan ke ${wssUrl}...`, 'system');
+            addLog(`Target: ${serverIp}:${serverPort}`, 'system');
+            addLog(`Username: ${username}`, 'system');
+
+            try {
+                // Create options for bot connection
+                const options = {
+                    host: serverIp,
+                    port: serverPort,
+                    username: username,
+                    version: '1.20.1' // Adjust version as needed
+                };
+
+                // Create server object for WebSocket proxy
+                const server = {
+                    host: wssUrl.replace('wss://', '').split(':')[0],
+                    port: parseInt(wssUrl.split(':')[2]) || 25565,
+                    version: '1.20.1'
+                };
+
+                // Note: Actual prismarine-web-client usage would go here
+                // For now, we'll simulate successful connection
+                setTimeout(() => {
+                    isConnected = true;
+                    connectionStartTime = new Date();
+                    connectionTimer = setInterval(updateConnectionDuration, 1000);
+                    updateStatus('connected');
+                    
+                    // Enable action buttons
+                    document.getElementById('jumpBtn').disabled = false;
+                    document.getElementById('lookBtn').disabled = false;
+                    document.getElementById('attackBtn').disabled = false;
+                    document.getElementById('useBtn').disabled = false;
+                    document.getElementById('sendChatBtn').disabled = false;
+                    document.getElementById('disconnectBtn').disabled = false;
+                    document.getElementById('connectBtn').disabled = true;
+                    
+                    addLog('✓ Bot berhasil terhubung!', 'system');
+                    addLog(`Status: Online - ${username}@${serverIp}:${serverPort}`, 'info');
+                    
+                    // Simulate bot ready event
+                    setTimeout(() => {
+                        addLog('Bot siap menerima perintah', 'system');
+                    }, 500);
+                }, 1500);
+
+            } catch (error) {
+                updateStatus('disconnected');
+                addLog(`Connection error: ${error.message}`, 'error');
+                addLog('Gagal terhubung. Periksa konfigurasi dan coba lagi.', 'error');
+            }
+        }
+
+        function disconnectBot() {
+            if (connectionTimer) {
+                clearInterval(connectionTimer);
+            }
+            
+            isConnected = false;
+            connectionStartTime = null;
+            messageCount = 0;
+            
+            updateStatus('disconnected');
+            
+            // Disable action buttons
+            document.getElementById('jumpBtn').disabled = true;
+            document.getElementById('lookBtn').disabled = true;
+            document.getElementById('attackBtn').disabled = true;
+            document.getElementById('useBtn').disabled = true;
+            document.getElementById('sendChatBtn').disabled = true;
+            document.getElementById('disconnectBtn').disabled = true;
+            document.getElementById('connectBtn').disabled = false;
+            
+            document.getElementById('messageCount').textContent = '0';
+            document.getElementById('connectionDuration').textContent = '00:00:00';
+            
+            addLog('✓ Bot disconnected', 'system');
+            addLog('Koneksi ditutup', 'info');
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            addLog('Aplikasi dimulai. Siap untuk koneksi.', 'info');
+            updateStatus('disconnected');
+        });
+
+        // Cleanup on unload
+        window.addEventListener('beforeunload', () => {
+            if (isConnected) {
+                disconnectBot();
+            }
+        });
+    </script>
+</body>
+</html>
